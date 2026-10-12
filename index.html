@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auditoría de Ciberseguridad B2B</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; background-color: #0d1117; color: #c9d1d9; text-align: center; padding: 40px 20px; }
+        h1 { color: #58a6ff; }
+        .container { max-width: 600px; margin: 0 auto; background: #161b22; padding: 30px; border-radius: 8px; border: 1px solid #30363d; }
+        input[type="text"] { width: 90%; padding: 10px; margin-bottom: 15px; border-radius: 5px; border: 1px solid #30363d; background: #0d1117; color: white; }
+        label { display: block; text-align: left; margin-bottom: 20px; font-size: 0.9em; color: #8b949e; cursor: pointer; }
+        button { background-color: #238636; color: white; border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; font-size: 1.1em; width: 100%; font-weight: bold;}
+        button:hover { background-color: #2ea043; }
+        button:disabled { background-color: #1a5c25; cursor: not-allowed; }
+        .results { margin-top: 20px; text-align: left; display: none; padding: 15px; border: 1px solid #f85149; background: rgba(248, 81, 73, 0.1); border-radius: 5px; }
+        .danger { color: #f85149; font-weight: bold; }
+        #paywall { display: none; margin-top: 30px; border-top: 1px solid #30363d; padding-top: 20px; }
+        #report-output { display: none; margin-top: 20px; text-align: left; background: #0d1117; padding: 20px; border-left: 4px solid #58a6ff; white-space: pre-wrap; font-family: monospace; line-height: 1.5; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Scanner Perimetral B2B</h1>
+        <p>Verifica si la infraestructura de tu agencia o la de tus clientes cumple con los estándares mínimos de OWASP.</p>
+        
+        <form id="audit-form">
+            <input type="text" id="target-url" placeholder="Ej: www.tuagencia.com" required>
+            <label>
+                <input type="checkbox" id="consent" required>
+                Autorizo el escaneo de puertos y cabeceras de este dominio del cual soy administrador autorizado.
+            </label>
+            <button type="submit" id="scan-btn">Ejecutar Diagnóstico Gratuito</button>
+        </form>
+
+        <!-- Aquí se inyectan los resultados del backend -->
+        <div id="results" class="results">
+            <h3 style="color: #f85149; margin-top:0;">Vulnerabilidades Detectadas:</h3>
+            <p><strong>Puertos Críticos Expuestos:</strong> <span id="res-ports" class="danger"></span></p>
+            <p><strong>Cabeceras Faltantes:</strong> <span id="res-headers" class="danger"></span></p>
+            <p style="font-size: 0.85em; color: #8b949e; margin-bottom: 0;">* Estas brechas permiten ataques automatizados, inyección de código y robo de datos.</p>
+        </div>
+
+        <!-- Muro de pago que se muestra solo si hay peligro -->
+        <div id="paywall">
+            <h2 style="color: #3fb950;">Desbloquea el Plan de Mitigación</h2>
+            <p>Obtén el Reporte Ejecutivo por IA y los comandos exactos de firewall/servidor para parchear estas vulnerabilidades de inmediato.</p>
+            <h3 style="margin-bottom: 20px;">$300 USD (Pago Único)</h3>
+            <div id="paypal-button-container"></div>
+        </div>
+
+        <!-- El producto final -->
+        <div id="report-output"></div>
+    </div>
+
+    <!-- SDK PayPal -->
+    <script src="https://www.paypal.com/sdk/js?client-id=TU_CLIENT_ID&currency=USD"></script>
+    <script>
+        let scanData = {};
+        
+        // Cuando subas app.py a Render, cambia esto por tu URL de Render (ej: https://mi-app.onrender.com)
+        const backendUrl = "http://localhost:5000"; 
+
+        document.getElementById('audit-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('scan-btn');
+            btn.innerText = "Auditando infraestructura...";
+            btn.disabled = true;
+
+            const url = document.getElementById('target-url').value;
+            const consent = document.getElementById('consent').checked;
+
+            try {
+                const response = await fetch(`${backendUrl}/api/scan`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url, consent })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+
+                scanData = data;
+                document.getElementById('res-ports').innerText = data.open_ports.length > 0 ? data.open_ports.join(', ') : "Ninguno detectado";
+                document.getElementById('res-headers').innerText = data.missing_headers.length > 0 ? data.missing_headers.join(', ') : "Ninguna detectada";
+                
+                document.getElementById('results').style.display = 'block';
+                
+                // Estrategia de conversión: Si hay errores, mostrar muro de pago
+                if (data.open_ports.length > 0 || data.missing_headers.length > 0) {
+                    document.getElementById('paywall').style.display = 'block';
+                } else {
+                    alert("Infraestructura segura. No se detectaron vulnerabilidades perimetrales básicas.");
+                }
+
+            } catch (error) {
+                alert("Error de conexión. Verifica que el backend esté corriendo.");
+            } finally {
+                btn.innerText = "Ejecutar Diagnóstico Gratuito";
+                btn.disabled = false;
+            }
+        });
+
+        // Configuración de PayPal
+        paypal.Buttons({
+            createOrder: function(data, actions) {
+                return actions.order.create({
+                    purchase_units: [{
+                        description: "Auditoría de Ciberseguridad y Mitigación B2B",
+                        amount: { value: '300.00' }
+                    }]
+                });
+            },
+            onApprove: function(data, actions) {
+                return actions.order.capture().then(async function(details) {
+                    document.getElementById('paywall').innerHTML = "<h3 style='color: #58a6ff;'>Generando Reporte y Tácticas de Mitigación...</h3>";
+                    
+                    try {
+                        const res = await fetch(`${backendUrl}/api/report`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                domain: scanData.target,
+                                open_ports: scanData.open_ports,
+                                missing_headers: scanData.missing_headers,
+                                payment_status: "COMPLETED" // En un entorno real, la validación se hace con webhooks de PayPal en el backend
+                            })
+                        });
+                        const reportData = await res.json();
+                        
+                        document.getElementById('report-output').innerText = reportData.executive_report;
+                        document.getElementById('report-output').style.display = 'block';
+                        document.getElementById('paywall').style.display = 'none';
+                        document.getElementById('results').style.display = 'none';
+                        document.getElementById('audit-form').style.display = 'none';
+                    } catch (err) {
+                        alert("Pago procesado, pero ocurrió un error generando el reporte. Escribe a soporte.");
+                    }
+                });
+            }
+        }).render('#paypal-button-container');
+    </script>
+</body>
+</html>
